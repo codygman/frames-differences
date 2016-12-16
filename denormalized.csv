@@ -1,4 +1,4 @@
-key_a,key_b,key_c,key_d,tag
-1,2,3,4,"one"
-9,1,,1,"three"
-1,1,2,1,"four"
+key_a,key_b,key_c,key_d,tag,bdouble,bbool
+1,2,3,4,"one",0.5,False
+9,1,,1,"three",0.3,False
+1,1,2,1,"four",99.8,True

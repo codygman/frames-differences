@@ -1,5 +1,5 @@
-composite_key,tag
-"1234","one"
-"5678","two"
-"9101","three"
-"1121","four"
+composite_key,tag,adouble,abool
+"1234","one",1.3,True
+"5678","two",5.3,False
+"9101","three",4.8,False
+"1121","four",9.6,True
