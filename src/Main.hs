@@ -37,8 +37,11 @@ tableTypesOverride rowGen {rowTypeName ="Denormalized"} "denormalized.csv" []
 class Default a where
   def :: a
 
-instance Default (s :-> Int) where def = 0
-instance Default (s :-> Text) where def = mempty
+instance Default (s :-> Int) where def = Col 0
+instance Default (s :-> Text) where def = Col mempty
+instance Default (s :-> Double) where def = Col 0.0
+instance Default (s :-> Bool) where def = Col False
+
 
 -- We can write instances for /all/ 'Rec' values.
 instance (Applicative f, LAll Default ts, RecApplicative ts)
