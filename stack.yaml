@@ -37,6 +37,11 @@ resolver: lts-7.13
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - '.'
+- location:
+   git: https://github.com/codygman/Frames.git
+   commit: bc31ebe8f1a700570d1b89556db6800bbcba09a8
+  extra-dep: true
+
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps: []
