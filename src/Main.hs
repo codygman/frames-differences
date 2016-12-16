@@ -1,5 +1,8 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DataKinds #-}
@@ -10,12 +13,13 @@ module Main where
 import Frames hiding ((:&))
 import Frames.CSV (tableTypesOverride, RowGen(..), rowGen, readTableOpt)
 import Frames.InCore (RecVec)
-import Data.Vinyl (Rec(RNil), RecApplicative(rpure))
+import Data.Vinyl (Rec(RNil), RecApplicative(rpure), rmap, rapply)
 import Data.Vinyl.TypeLevel (RIndex)
+import Data.Vinyl.Functor (Lift(..))
 import Control.Lens (view, (&), (?~))
 import Pipes (Producer, (>->), runEffect)
 import Pipes.Internal (Proxy)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>),First(..))
 import Data.Maybe (fromMaybe, isNothing)
 import qualified Control.Foldl as L
 import qualified Pipes.Prelude as P
@@ -28,6 +32,19 @@ import qualified Data.Text.Format as T
 tableTypesOverride rowGen {rowTypeName ="Normalized"} "normalized.csv" [("composite_key", ''Text)]
 tableTypesOverride rowGen {rowTypeName ="Denormalized"} "denormalized.csv" []
 
+
+-- An en passant Default class
+class Default a where
+  def :: a
+
+instance Default (s :-> Int) where def = 0
+instance Default (s :-> Text) where def = mempty
+
+-- We can write instances for /all/ 'Rec' values.
+instance (Applicative f, LAll Default ts, RecApplicative ts)
+  => Default (Rec f ts) where
+  def = reifyDict [pr|Default|] (pure def)
+
 mkCompositeKey :: (RecApplicative rs2, KeyA ∈ rs, KeyB ∈ rs, KeyC ∈ rs, KeyD ∈ rs, CompositeKey ∈ rs2) =>
                   Record rs -> Record rs2
 mkCompositeKey denormRow = fromMaybe (error "failed to make composite key") . recMaybe $ newRow
@@ -35,6 +52,38 @@ mkCompositeKey denormRow = fromMaybe (error "failed to make composite key") . re
         compositeKeyTxt = view' keyA <> view' keyB <> view' keyC <> view' keyD
         view' l = LT.toStrict $ T.format "{}" (T.Only (view l denormRow))
         intToTxt = T.pack . show :: Int -> Text -- slow!
+
+normalizedDefaulted :: Producer Normalized IO ()
+normalizedDefaulted = readTableMaybe "normalized.csv" >-> P.map (fromJust . holeFiller)
+  where holeFiller :: Rec Maybe (RecordColumns Normalized) -> Maybe Normalized
+        holeFiller = recMaybe
+                   . rmap getFirst
+                   . rapply (rmap (Lift . flip (<>)) def)
+                   . rmap First
+        fromJust = fromMaybe (error "normalizedDefaulted failure")
+
+denormalizedDefaulted :: Producer Denormalized IO ()
+denormalizedDefaulted = readTableMaybe "denormalized.csv" >-> P.map (fromJust . holeFiller)
+  where holeFiller :: Rec Maybe (RecordColumns Denormalized) -> Maybe Denormalized
+        holeFiller = recMaybe
+                   . rmap getFirst
+                   . rapply (rmap (Lift . flip (<>)) def)
+                   . rmap First
+        fromJust = fromMaybe (error "denormalizedDefaulted failure")
+
+-- the below example shows why denormalizedDefaulted is necessary in combination with the previous commit message headline and body:
+-- λ> runEffect $ denormalized >-> P.print
+-- {key_a :-> 1, key_b :-> 2, key_c :-> 3, key_d :-> 4, tag :-> "one"}
+-- {key_a :-> 1, key_b :-> 1, key_c :-> 2, key_d :-> 1, tag :-> "four"}
+-- λ> runEffect $ denormalizedDefaulted >-> P.print
+-- {key_a :-> 1, key_b :-> 2, key_c :-> 3, key_d :-> 4, tag :-> "one"}
+-- {key_a :-> 9, key_b :-> 1, key_c :-> 0, key_d :-> 1, tag :-> "three"}
+-- {key_a :-> 1, key_b :-> 1, key_c :-> 2, key_d :-> 1, tag :-> "four"}
+
+
+-- denormalized' is actually the "normalized" denormalized in that it contains the same compositeKey. I was lazy and didn't care about keeping the tag.
+denormalizedDefaulted' :: Producer (Record '[CompositeKey]) IO ()
+denormalizedDefaulted' = denormalizedDefaulted >-> P.map mkCompositeKey
 
 normalized :: Producer Normalized IO ()
 normalized = readTableOpt normalizedParser "normalized.csv"
