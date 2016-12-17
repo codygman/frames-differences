@@ -153,7 +153,7 @@ findMissingRows referenceProducer checkProducer = do
   -- L.fold (L.Fold (\m r -> M.insert (view compositeKey r) 0 m) M.empty id) <$> inCoreAoS checkProducer
 
   -- keep only rows we didn't have in the checkProducer index produced
-  return $ referenceProducer >-> P.filter (\r -> isNothing $ M.lookup (view compositeKey r) compositeKeyMap)
+  return $ referenceProducer >-> P.filter (\r -> M.notMember (view compositeKey r) compositeKeyMap)
 
 printMissingRows :: IO ()
 printMissingRows = do
