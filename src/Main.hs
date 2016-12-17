@@ -68,7 +68,7 @@ mkCompositeKey a b c d = a <> b <> c <> d
 defaultingProducer :: (ReadRec rs, RecApplicative rs,
    MonadIO m, LAll Default rs) =>
   FilePath
-  -> String -> Proxy Pipes.Internal.X () () (Rec Identity rs) m ()
+  -> String -> Producer (Rec Identity rs) m ()
 defaultingProducer fp label = readTableMaybe fp >-> P.map (holeFiller label)
 
 recMaybe'' :: forall rs. Rec Maybe rs -> Maybe (Record rs)
