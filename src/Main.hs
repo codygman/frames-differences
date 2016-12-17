@@ -21,7 +21,6 @@ import Data.Vinyl.TypeLevel
 import Data.Vinyl.Functor (Lift(..), Identity(..))
 import Control.Lens (view, (&), (?~))
 import Pipes (Producer, (>->), runEffect)
-import Pipes.Internal (Proxy, X)
 import Data.Monoid ((<>),First(..))
 import Data.Maybe (fromMaybe, isNothing)
 import qualified Control.Foldl as L
@@ -125,23 +124,15 @@ buildCompositeKeyMap :: (Foldable f, CompositeKey ∈ rs) =>
                         f (Record rs) -> M.Map Text Integer
 buildCompositeKeyMap = L.fold addCompositeKeyToMapFold
 
-findMissingRows :: forall
-                   (m :: * -> *)
-                   (rs :: [*])
-                   a'
-                   a
-                   (m1 :: * -> *)
-                   r
-                   (rs1 :: [*]).
-                   ( Monad m1,
+findMissingRows :: ( Monad m1,
                      CompositeKey ∈ rs,
                      CompositeKey ∈ rs1,
                      L.PrimMonad m,
                      Frames.InCore.RecVec rs
                    ) =>
-                   Pipes.Internal.Proxy a' a () (Record rs1) m1 r
+                   Producer (Record rs1) m1 r
                 -> Producer (Record rs) m ()
-                -> m (Pipes.Internal.Proxy a' a () (Record rs1) m1 r)
+                -> m (Producer (Record rs1) m1 r)
 findMissingRows referenceProducer checkProducer = do
   -- build the index of rows in the producer to check
   compositeKeyMap <- buildCompositeKeyMap <$> inCoreAoS checkProducer
