@@ -8,6 +8,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
 import Frames hiding ((:&))
@@ -63,7 +64,6 @@ mkCompositeKey' denormRow = fromMaybe (error "failed to make composite key") . r
 mkCompositeKey :: Text -> Text -> Text -> Text -> Text
 mkCompositeKey a b c d = a <> b <> c <> d
 
--- TODO create a default producer which takes any producer and applies defaulting rules
 -- defaultProducer :: forall (rs1 :: [*]).
 --                    ( ReadRec rs1
 --                    ) =>
@@ -79,30 +79,33 @@ mkCompositeKey a b c d = a <> b <> c <> d
 recMaybe'' :: forall rs. Rec Maybe rs -> Maybe (Record rs)
 recMaybe'' = recMaybe
 
+holeFiller :: forall ty.
+              ( LAll Default ty
+              , RecApplicative ty
+              ) =>
+              String -> Rec Maybe ty -> Rec Identity ty
+holeFiller label rec1 = let fromJust = fromMaybe (error $ label ++ " failure")
+                            firstRec1 :: Rec First ty
+                            firstRec1 = rmap First rec1
+                            concattedStuff :: Rec First ty
+                            concattedStuff = rapply (rmap (Lift . flip (<>)) def) firstRec1
+                            firsts :: Rec Maybe ty
+                            firsts = rmap getFirst concattedStuff
+                            recMaybed :: Maybe (Rec Identity ty)
+                            recMaybed = recMaybe firsts
+                        in fromJust recMaybed
+
+
 -- fills in empty values with holeFiller and Defaults typeclass instances
 normalized :: Producer Normalized IO ()
-normalized = readTableMaybe "normalized.csv" >-> P.map (fromJust . holeFiller)
-  where holeFiller :: Rec Maybe (RecordColumns Normalized) -> Maybe Normalized
-        holeFiller = recMaybe
-                   . rmap getFirst
-                   . rapply (rmap (Lift . flip (<>)) def)
-                   . rmap First
-        fromJust = fromMaybe (error "normalizedDefaulted failure")
-
+normalized = readTableMaybe "normalized.csv" >-> P.map (holeFiller "normalized")
 
 type DenormalizedWithCompositeKey = Record (CompositeKey ': RecordColumns Denormalized)
 -- fills in empty values with holeFiller and Defaults typeclass instances
 denormalized :: Producer DenormalizedWithCompositeKey IO ()
 denormalized = readTableMaybe "denormalized.csv"
-                        >-> P.map (fromJust . holeFiller)
+                        >-> P.map (holeFiller "denormalized")
                         >-> P.map appendCompositeKey
-  where holeFiller :: Rec Maybe (RecordColumns Denormalized) -> Maybe Denormalized
-        holeFiller = recMaybe
-                   . rmap getFirst
-                   . rapply (rmap (Lift . flip (<>)) def)
-                   . rmap First
-        fromJust = fromMaybe (error "denormalizedDefaulted failure")
-
 
 appendCompositeKey :: forall (rs :: [*]) (rs2 :: [*]).
                       ( KeyA ∈ rs
