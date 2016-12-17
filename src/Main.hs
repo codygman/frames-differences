@@ -13,9 +13,10 @@ module Main where
 import Frames hiding ((:&))
 import Frames.CSV (tableTypesOverride, RowGen(..), rowGen, readTableOpt)
 import Frames.InCore (RecVec)
+import qualified Data.Vinyl as V
 import Data.Vinyl (Rec(RNil), RecApplicative(rpure), rmap, rapply)
-import Data.Vinyl.TypeLevel (RIndex)
-import Data.Vinyl.Functor (Lift(..))
+import Data.Vinyl.TypeLevel 
+import Data.Vinyl.Functor (Lift(..), Identity(..))
 import Control.Lens (view, (&), (?~))
 import Pipes (Producer, (>->), runEffect)
 import Pipes.Internal (Proxy)
@@ -28,10 +29,8 @@ import qualified Data.Text.Lazy as LT
 import qualified Data.Map as M
 import qualified Data.Text.Format as T
 
-
 tableTypesOverride rowGen {rowTypeName ="Normalized"} "normalized.csv" [("composite_key", ''Text)]
 tableTypesOverride rowGen {rowTypeName ="Denormalized"} "denormalized.csv" []
-
 
 -- An en passant Default class
 class Default a where
@@ -42,22 +41,31 @@ instance Default (s :-> Text) where def = Col mempty
 instance Default (s :-> Double) where def = Col 0.0
 instance Default (s :-> Bool) where def = Col False
 
-
 -- We can write instances for /all/ 'Rec' values.
 instance (Applicative f, LAll Default ts, RecApplicative ts)
   => Default (Rec f ts) where
   def = reifyDict [pr|Default|] (pure def)
 
-mkCompositeKey :: (RecApplicative rs2, KeyA ∈ rs, KeyB ∈ rs, KeyC ∈ rs, KeyD ∈ rs, CompositeKey ∈ rs2) =>
+mkCompositeKey' :: ( RecApplicative rs2
+                  , KeyA ∈ rs
+                  , KeyB ∈ rs
+                  , KeyC ∈ rs
+                  , KeyD ∈ rs
+                  , CompositeKey ∈ rs2
+                  ) =>
                   Record rs -> Record rs2
-mkCompositeKey denormRow = fromMaybe (error "failed to make composite key") . recMaybe $ newRow
+mkCompositeKey' denormRow = fromMaybe (error "failed to make composite key") . recMaybe $ newRow
   where newRow = rpure Nothing & compositeKey' ?~ Col compositeKeyTxt
         compositeKeyTxt = view' keyA <> view' keyB <> view' keyC <> view' keyD
         view' l = LT.toStrict $ T.format "{}" (T.Only (view l denormRow))
         intToTxt = T.pack . show :: Int -> Text -- slow!
 
-normalizedDefaulted :: Producer Normalized IO ()
-normalizedDefaulted = readTableMaybe "normalized.csv" >-> P.map (fromJust . holeFiller)
+mkCompositeKey :: Text -> Text -> Text -> Text -> Text
+mkCompositeKey a b c d = a <> b <> c <> d
+
+-- fills in empty values with holeFiller and Defaults typeclass instances
+normalized :: Producer Normalized IO ()
+normalized = readTableMaybe "normalized.csv" >-> P.map (fromJust . holeFiller)
   where holeFiller :: Rec Maybe (RecordColumns Normalized) -> Maybe Normalized
         holeFiller = recMaybe
                    . rmap getFirst
@@ -65,8 +73,13 @@ normalizedDefaulted = readTableMaybe "normalized.csv" >-> P.map (fromJust . hole
                    . rmap First
         fromJust = fromMaybe (error "normalizedDefaulted failure")
 
-denormalizedDefaulted :: Producer Denormalized IO ()
-denormalizedDefaulted = readTableMaybe "denormalized.csv" >-> P.map (fromJust . holeFiller)
+
+type DenormalizedWithCompositeKey = Record (CompositeKey ': RecordColumns Denormalized)
+-- fills in empty values with holeFiller and Defaults typeclass instances
+denormalized :: Producer DenormalizedWithCompositeKey IO ()
+denormalized = readTableMaybe "denormalized.csv"
+                        >-> P.map (fromJust . holeFiller)
+                        >-> P.map appendCompositeKey
   where holeFiller :: Rec Maybe (RecordColumns Denormalized) -> Maybe Denormalized
         holeFiller = recMaybe
                    . rmap getFirst
@@ -74,41 +87,17 @@ denormalizedDefaulted = readTableMaybe "denormalized.csv" >-> P.map (fromJust . 
                    . rmap First
         fromJust = fromMaybe (error "denormalizedDefaulted failure")
 
--- the below example shows why denormalizedDefaulted is necessary in combination with the previous commit message headline and body:
--- λ> runEffect $ denormalized >-> P.print
--- {key_a :-> 1, key_b :-> 2, key_c :-> 3, key_d :-> 4, tag :-> "one"}
--- {key_a :-> 1, key_b :-> 1, key_c :-> 2, key_d :-> 1, tag :-> "four"}
--- λ> runEffect $ denormalizedDefaulted >-> P.print
--- {key_a :-> 1, key_b :-> 2, key_c :-> 3, key_d :-> 4, tag :-> "one"}
--- {key_a :-> 9, key_b :-> 1, key_c :-> 0, key_d :-> 1, tag :-> "three"}
--- {key_a :-> 1, key_b :-> 1, key_c :-> 2, key_d :-> 1, tag :-> "four"}
 
-
--- denormalized' is actually the "normalized" denormalized in that it contains the same compositeKey. I was lazy and didn't care about keeping the tag.
-denormalizedDefaulted' :: Producer (Record '[CompositeKey]) IO ()
-denormalizedDefaulted' = denormalizedDefaulted >-> P.map mkCompositeKey
-
-normalized :: Producer Normalized IO ()
-normalized = readTableOpt normalizedParser "normalized.csv"
--- λ> runEffect $ normalized >-> P.take 5 >-> P.print
--- {composite_key :-> "1234", tag :-> "one"}
--- {composite_key :-> "5678", tag :-> "two"}
--- {composite_key :-> "9101", tag :-> "three"}
-
-denormalized :: Producer Denormalized IO ()
-denormalized = readTableOpt denormalizedParser "denormalized.csv"
--- λ> runEffect $ denormalized >-> P.take 5 >-> P.print
--- {key_a :-> 1, key_b :-> 2, key_c :-> 3, key_d :-> 4, tag :-> "one"}
--- {key_a :-> 5, key_b :-> 6, key_c :-> 7, key_d :-> 8, tag :-> "two"}
--- {key_a :-> 9, key_b :-> 1, key_c :-> 0, key_d :-> 1, tag :-> "three"}
-
--- denormalized' is actually the "normalized" denormalized in that it contains the same compositeKey. I was lazy and didn't care about keeping the tag.
-denormalized' :: Producer (Record '[CompositeKey]) IO ()
-denormalized' = denormalized >-> P.map mkCompositeKey
--- λ> runEffect $ denormalized' >-> P.take 5 >-> P.print
--- {composite_key :-> "1234"}
--- {composite_key :-> "5678"}
--- {composite_key :-> "9101"}
+appendCompositeKey :: forall (rs :: [*]) (rs2 :: [*]).
+                      ( KeyA ∈ rs
+                      , KeyB ∈ rs
+                      , KeyC ∈ rs
+                      , KeyD ∈ rs
+                      ) => Record rs -> Record (CompositeKey ': rs)
+appendCompositeKey inRecord = frameConsA ("compositeKeysText" :: Text) inRecord
+  where compositeKeyTxt = mkCompositeKey (viewToTxt keyA inRecord) (viewToTxt keyB inRecord) (viewToTxt keyC inRecord) (viewToTxt keyD inRecord)
+        viewToTxt l r = intToTxt (view l r)
+        intToTxt i = LT.toStrict $ T.format "{}" (T.Only i)
 
 addCompositeKeyToMapFold :: (Num a, CompositeKey ∈ rs) =>
                             L.Fold (Record rs) (M.Map Text a)
@@ -153,6 +142,6 @@ printMissingRows :: IO ()
 printMissingRows = do
   putStrLn "rows normalized contains deonrmalized does not"
   -- findMissingRows normalized denormalized' >>= \p -> runEffect $ p >-> P.print
-  findMissingRows normalizedDefaulted denormalizedDefaulted' >>= \p -> runEffect $ p >-> P.print
+  findMissingRows normalized denormalized >>= \p -> runEffect $ p >-> P.print
 
 main = undefined
