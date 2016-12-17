@@ -12,20 +12,17 @@
 module Main where
 
 import Frames hiding ((:&))
-import Frames.CSV (tableTypesOverride, RowGen(..), rowGen, readTableOpt, ReadRec)
+import Frames.CSV (tableTypesOverride, RowGen(..), rowGen, ReadRec)
 import Frames.InCore (RecVec)
 import Control.Monad.IO.Class (MonadIO)
-import qualified Data.Vinyl as V
-import Data.Vinyl (Rec(RNil), RecApplicative(rpure), rmap, rapply)
-import Data.Vinyl.TypeLevel 
+import Data.Vinyl (Rec, RecApplicative(rpure), rmap, rapply)
 import Data.Vinyl.Functor (Lift(..), Identity(..))
 import Control.Lens (view, (&), (?~))
-import Pipes (Pipe, Producer, (>->), runEffect)
+import Pipes (Producer, (>->), runEffect)
 import Data.Monoid ((<>),First(..))
 import Data.Maybe (fromMaybe, isNothing)
 import qualified Control.Foldl as L
 import qualified Pipes.Prelude as P
-import qualified Data.Text as T
 import qualified Data.Text.Lazy as LT
 import qualified Data.Map as M
 import qualified Data.Text.Format as T
@@ -59,7 +56,6 @@ mkCompositeKey' denormRow = fromMaybe (error "failed to make composite key") . r
   where newRow = rpure Nothing & compositeKey' ?~ Col compositeKeyTxt
         compositeKeyTxt = view' keyA <> view' keyB <> view' keyC <> view' keyD
         view' l = LT.toStrict $ T.format "{}" (T.Only (view l denormRow))
-        intToTxt = T.pack . show :: Int -> Text -- slow!
 
 mkCompositeKey :: Text -> Text -> Text -> Text -> Text
 mkCompositeKey a b c d = a <> b <> c <> d
@@ -166,4 +162,5 @@ printMissingRows = do
   -- TODO this needs to actually return the right answer :P
   findMissingRows normalized denormalized >>= \p -> runEffect $ p >-> P.print
 
+main :: IO ()
 main = undefined
