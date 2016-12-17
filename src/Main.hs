@@ -142,6 +142,7 @@ printMissingRows :: IO ()
 printMissingRows = do
   putStrLn "rows normalized contains deonrmalized does not"
   -- findMissingRows normalized denormalized' >>= \p -> runEffect $ p >-> P.print
-  findMissingRows normalized denormalized >>= \p -> runEffect $ p >-> P.print
+  -- TODO this needs to actually return the right answer :P
+  findMissingRows denormalized normalized >>= \p -> runEffect $ p >-> P.print
 
 main = undefined
