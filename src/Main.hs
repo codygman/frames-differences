@@ -128,15 +128,15 @@ buildCompositeKeyMap :: ( Foldable f
                         ) => f (Record rs) -> M.Map Text Integer
 buildCompositeKeyMap = L.fold addCompositeKeyToMapFold
 
-findMissingRows :: ( Monad m1,
+findMissingRows :: ( Monad m,
                      CompositeKey ∈ rs,
                      CompositeKey ∈ rs1,
-                     L.PrimMonad m,
+                     L.PrimMonad pm,
                      Frames.InCore.RecVec rs
                    ) =>
-                   Producer (Record rs1) m1 r
-                -> Producer (Record rs) m ()
-                -> m (Producer (Record rs1) m1 r)
+                   Producer (Record rs1) m r
+                -> Producer (Record rs) pm ()
+                -> pm (Producer (Record rs1) m r)
 findMissingRows referenceProducer checkProducer = do
   -- build the index of rows in the producer to check
   compositeKeyMap <- buildCompositeKeyMap <$> inCoreAoS checkProducer
