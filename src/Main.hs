@@ -20,7 +20,7 @@ import Data.Vinyl (Rec(RNil), RecApplicative(rpure), rmap, rapply)
 import Data.Vinyl.TypeLevel 
 import Data.Vinyl.Functor (Lift(..), Identity(..))
 import Control.Lens (view, (&), (?~))
-import Pipes (Producer, (>->), runEffect)
+import Pipes (Pipe, Producer, (>->), runEffect)
 import Data.Monoid ((<>),First(..))
 import Data.Maybe (fromMaybe, isNothing)
 import qualified Control.Foldl as L
@@ -127,6 +127,19 @@ buildCompositeKeyMap :: ( Foldable f
                         , CompositeKey ∈ rs
                         ) => f (Record rs) -> M.Map Text Integer
 buildCompositeKeyMap = L.fold addCompositeKeyToMapFold
+
+-- TODO upgrade(?) to this approach suggested by acowley
+-- findMissingRows' :: ( Monad m
+--                     , CompositeKey ∈ rs
+--                     , CompositeKey ∈ rs1
+--                     ) =>
+--                     Producer (Record rs) m ()
+--                  -> m (Pipe (Record rs1) (Record rs1) m ())
+-- findMissingRows' checkProducer = do
+--   -- build the index of rows in the producer to check
+--   compositeKeyMap <- buildCompositeKeyMap checkProducer
+--   -- keep only rows we didn't have in the checkProducer index produced
+--   return $ P.filter (\r -> M.notMember (view compositeKey r) compositeKeyMap)
 
 findMissingRows :: ( Monad m,
                      CompositeKey ∈ rs,
