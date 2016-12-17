@@ -12,15 +12,16 @@
 module Main where
 
 import Frames hiding ((:&))
-import Frames.CSV (tableTypesOverride, RowGen(..), rowGen, readTableOpt)
+import Frames.CSV (tableTypesOverride, RowGen(..), rowGen, readTableOpt, ReadRec)
 import Frames.InCore (RecVec)
+import Control.Monad.IO.Class (MonadIO)
 import qualified Data.Vinyl as V
 import Data.Vinyl (Rec(RNil), RecApplicative(rpure), rmap, rapply)
 import Data.Vinyl.TypeLevel 
 import Data.Vinyl.Functor (Lift(..), Identity(..))
 import Control.Lens (view, (&), (?~))
 import Pipes (Producer, (>->), runEffect)
-import Pipes.Internal (Proxy)
+import Pipes.Internal (Proxy, X)
 import Data.Monoid ((<>),First(..))
 import Data.Maybe (fromMaybe, isNothing)
 import qualified Control.Foldl as L
@@ -64,17 +65,11 @@ mkCompositeKey' denormRow = fromMaybe (error "failed to make composite key") . r
 mkCompositeKey :: Text -> Text -> Text -> Text -> Text
 mkCompositeKey a b c d = a <> b <> c <> d
 
--- defaultProducer :: forall (rs1 :: [*]).
---                    ( ReadRec rs1
---                    ) =>
---                    String -> String -> Producer (Record rs1) IO ()
--- defaultProducer fp label = readTableMaybe fp >-> P.map (fromJust . holeFiller)
-  -- where holeFiller :: Rec Maybe (RecordColumns rs1) -> Maybe (Record _)
-  --       holeFiller = recMaybe
-  --                  . rmap getFirst
-  --                  . rapply (rmap (Lift . flip (<>)) def)
-  --                  . rmap First
-  --       fromJust = fromMaybe (error $ label ++ " failure")
+defaultingProducer :: (ReadRec rs, RecApplicative rs,
+   MonadIO m, LAll Default rs) =>
+  FilePath
+  -> String -> Proxy Pipes.Internal.X () () (Rec Identity rs) m ()
+defaultingProducer fp label = readTableMaybe fp >-> P.map (holeFiller label)
 
 recMaybe'' :: forall rs. Rec Maybe rs -> Maybe (Record rs)
 recMaybe'' = recMaybe
@@ -95,17 +90,16 @@ holeFiller label rec1 = let fromJust = fromMaybe (error $ label ++ " failure")
                             recMaybed = recMaybe firsts
                         in fromJust recMaybed
 
-
 -- fills in empty values with holeFiller and Defaults typeclass instances
 normalized :: Producer Normalized IO ()
-normalized = readTableMaybe "normalized.csv" >-> P.map (holeFiller "normalized")
+-- normalized = readTableMaybe "normalized.csv" >-> P.map (holeFiller "normalized")
+normalized = defaultingProducer "normalized.csv" "normalized" 
 
 type DenormalizedWithCompositeKey = Record (CompositeKey ': RecordColumns Denormalized)
 -- fills in empty values with holeFiller and Defaults typeclass instances
 denormalized :: Producer DenormalizedWithCompositeKey IO ()
-denormalized = readTableMaybe "denormalized.csv"
-                        >-> P.map (holeFiller "denormalized")
-                        >-> P.map appendCompositeKey
+denormalized = defaultingProducer "denormalized.csv" "denormalized"
+               >-> P.map appendCompositeKey
 
 appendCompositeKey :: forall (rs :: [*]) (rs2 :: [*]).
                       ( KeyA ∈ rs
