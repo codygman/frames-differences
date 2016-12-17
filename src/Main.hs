@@ -101,7 +101,7 @@ denormalized :: Producer DenormalizedWithCompositeKey IO ()
 denormalized = defaultingProducer "denormalized.csv" "denormalized"
                >-> P.map appendCompositeKey
 
-appendCompositeKey :: forall (rs :: [*]) (rs2 :: [*]).
+appendCompositeKey :: forall (rs :: [*]).
                       ( KeyA ∈ rs
                       , KeyB ∈ rs
                       , KeyC ∈ rs
