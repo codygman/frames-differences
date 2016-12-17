@@ -108,7 +108,7 @@ appendCompositeKey :: forall (rs :: [*]).
                       , KeyC ∈ rs
                       , KeyD ∈ rs
                       ) => Record rs -> Record (CompositeKey ': rs)
-appendCompositeKey inRecord = frameConsA ("compositeKeysText" :: Text) inRecord
+appendCompositeKey inRecord = frameConsA compositeKeyTxt inRecord
   where compositeKeyTxt = mkCompositeKey (viewToTxt keyA inRecord) (viewToTxt keyB inRecord) (viewToTxt keyC inRecord) (viewToTxt keyD inRecord)
         viewToTxt l r = intToTxt (view l r)
         intToTxt i = LT.toStrict $ T.format "{}" (T.Only i)
