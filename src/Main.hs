@@ -63,6 +63,22 @@ mkCompositeKey' denormRow = fromMaybe (error "failed to make composite key") . r
 mkCompositeKey :: Text -> Text -> Text -> Text -> Text
 mkCompositeKey a b c d = a <> b <> c <> d
 
+-- TODO create a default producer which takes any producer and applies defaulting rules
+-- defaultProducer :: forall (rs1 :: [*]).
+--                    ( ReadRec rs1
+--                    ) =>
+--                    String -> String -> Producer (Record rs1) IO ()
+-- defaultProducer fp label = readTableMaybe fp >-> P.map (fromJust . holeFiller)
+  -- where holeFiller :: Rec Maybe (RecordColumns rs1) -> Maybe (Record _)
+  --       holeFiller = recMaybe
+  --                  . rmap getFirst
+  --                  . rapply (rmap (Lift . flip (<>)) def)
+  --                  . rmap First
+  --       fromJust = fromMaybe (error $ label ++ " failure")
+
+recMaybe'' :: forall rs. Rec Maybe rs -> Maybe (Record rs)
+recMaybe'' = recMaybe
+
 -- fills in empty values with holeFiller and Defaults typeclass instances
 normalized :: Producer Normalized IO ()
 normalized = readTableMaybe "normalized.csv" >-> P.map (fromJust . holeFiller)
