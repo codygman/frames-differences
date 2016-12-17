@@ -141,7 +141,7 @@ findMissingRows referenceProducer checkProducer = do
   -- build the index of rows in the producer to check
   compositeKeyMap <- buildCompositeKeyMap <$> inCoreAoS checkProducer
   -- we could have built compositeKeyMap in a single line if we were golfing
-  -- L.fold (L.Fold (\m r -> M.insert (view compositeKey r) 0 m) (M.empty) id) <$> inCoreAoS checkProducer
+  -- L.fold (L.Fold (\m r -> M.insert (view compositeKey r) 0 m) M.empty id) <$> inCoreAoS checkProducer
 
   -- keep only rows we didn't have in the checkProducer index produced
   return $ referenceProducer >-> P.filter (\r -> isNothing $ M.lookup (view compositeKey r) compositeKeyMap)
