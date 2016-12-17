@@ -64,10 +64,12 @@ mkCompositeKey' denormRow = fromMaybe (error "failed to make composite key") . r
 mkCompositeKey :: Text -> Text -> Text -> Text -> Text
 mkCompositeKey a b c d = a <> b <> c <> d
 
-defaultingProducer :: (ReadRec rs, RecApplicative rs,
-   MonadIO m, LAll Default rs) =>
-  FilePath
-  -> String -> Producer (Rec Identity rs) m ()
+defaultingProducer :: ( ReadRec rs
+                      , RecApplicative rs
+                      , MonadIO m
+                      , LAll Default rs
+                      ) =>
+                      FilePath -> String -> Producer (Rec Identity rs) m ()
 defaultingProducer fp label = readTableMaybe fp >-> P.map (holeFiller label)
 
 recMaybe'' :: forall rs. Rec Maybe rs -> Maybe (Record rs)
@@ -111,17 +113,19 @@ appendCompositeKey inRecord = frameConsA ("compositeKeysText" :: Text) inRecord
         viewToTxt l r = intToTxt (view l r)
         intToTxt i = LT.toStrict $ T.format "{}" (T.Only i)
 
-addCompositeKeyToMapFold :: (Num a, CompositeKey ∈ rs) =>
-                            L.Fold (Record rs) (M.Map Text a)
+addCompositeKeyToMapFold :: ( Num a
+                            , CompositeKey ∈ rs
+                            ) => L.Fold (Record rs) (M.Map Text a)
 addCompositeKeyToMapFold = L.Fold (\m r -> addCompositeKeyToMap m r) (M.empty) id
 
-addCompositeKeyToMap
-  :: (Num a, CompositeKey ∈ rs) =>
-     M.Map Text a -> Record rs -> M.Map Text a
+addCompositeKeyToMap :: ( Num a
+                        , CompositeKey ∈ rs
+                        ) => M.Map Text a -> Record rs -> M.Map Text a
 addCompositeKeyToMap m r = M.insert (view compositeKey r) 0 m
 
-buildCompositeKeyMap :: (Foldable f, CompositeKey ∈ rs) =>
-                        f (Record rs) -> M.Map Text Integer
+buildCompositeKeyMap :: ( Foldable f
+                        , CompositeKey ∈ rs
+                        ) => f (Record rs) -> M.Map Text Integer
 buildCompositeKeyMap = L.fold addCompositeKeyToMapFold
 
 findMissingRows :: ( Monad m1,
