@@ -124,12 +124,7 @@ findMissingRows checkProducer = do
   pure $ P.filter (\r -> M.notMember (view compositeKey r) (compositeKeyMap :: M.Map Text Integer))
 
 -- -- TODO allow providing a lens to find missing rows on
--- findMissingRowsOn :: forall (checkRec :: [*]) (outRec :: [*]) (checkOrOutRec :: [*]) (monad :: * -> *) (key :: *) label.
---                      ( Monad monad
---                      , label ∈ checkRec
---                      , label ∈ outRec
---                      , label ∈ checkOrOutRec
-findMissingRowsOn :: forall checkRec outRec monad key .
+findMissingRowsOn :: forall (checkRec :: [*]) (outRec :: [*])  (monad :: * -> *) (key :: *).
                      ( Monad monad
                      , Ord key
                      , Show key
