@@ -173,8 +173,6 @@ findMissingRowsOn lens1 lens2 checkProducer = do
 --             -> M.notMember (view lens (r :: Record outRec)) keyMap)’
 -- Compilation failed.
 
-
-
 printMissingRows :: IO ()
 printMissingRows = do
   putStrLn "rows normalized contains denormalized does not"
