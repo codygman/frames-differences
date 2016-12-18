@@ -20,6 +20,7 @@ import Control.Lens (view, (&), (?~))
 import Pipes (Pipe,Producer, (>->), runEffect)
 import Data.Monoid ((<>),First(..))
 import Data.Maybe (fromMaybe)
+import Control.Lens.Getter(Getting )
 import qualified Pipes.Prelude as P
 import qualified Data.Text.Lazy as LT
 import qualified Data.Map as M
@@ -100,7 +101,11 @@ appendCompositeKey :: forall (rs :: [*]).
                       , KeyD ∈ rs
                       ) => Record rs -> Record (CompositeKey ': rs)
 appendCompositeKey inRecord = frameConsA compositeKeyTxt inRecord
-  where compositeKeyTxt = mkCompositeKey (viewToTxt keyA inRecord) (viewToTxt keyB inRecord) (viewToTxt keyC inRecord) (viewToTxt keyD inRecord)
+  where compositeKeyTxt = mkCompositeKey
+                            (viewToTxt keyA inRecord)
+                            (viewToTxt keyB inRecord)
+                            (viewToTxt keyC inRecord)
+                            (viewToTxt keyD inRecord)
         viewToTxt l r = intToTxt (view l r)
         intToTxt i = LT.toStrict $ T.format "{}" (T.Only i)
 
@@ -117,6 +122,23 @@ findMissingRows checkProducer = do
   -- read a map of the checkProducer into memory
   compositeKeyMap <- P.fold (\m r -> addCompositeKeyToMap m r) M.empty id checkProducer
   pure $ P.filter (\r -> M.notMember (view compositeKey r) (compositeKeyMap :: M.Map Text Integer))
+
+-- TODO allow providing a lens to find missing rows on
+-- findMissingRowsOn :: forall rs1 rs2 m label f0. ( Monad m
+--                                        , label ∈ rs1
+--                                        , label ∈ rs2
+--                                        , Functor f0
+--                                        ) =>
+--                      -- Control.Lens.Getter.Getting Text (Rec Identity rs2) Text
+--                      (Text -> f0 Text) -> Record rs1 -> f0 (Record rs1)
+--                   -> Producer (Record rs1) m ()
+--                   -> m (Pipe (Record rs2) (Record rs2) m ())
+-- findMissingRowsOn lens checkProducer = do
+--   -- read a map of the checkProducer into memory
+--   compositeKeyMap <- P.fold (\m r -> addCompositeKeyToMap m r) M.empty id checkProducer
+--   pure $ P.filter (\r -> M.notMember (view lens r) (compositeKeyMap :: M.Map Text Integer))
+
+
 
 printMissingRows :: IO ()
 printMissingRows = do
