@@ -13,15 +13,13 @@ module Main where
 
 import Frames hiding ((:&))
 import Frames.CSV (tableTypesOverride, RowGen(..), rowGen, ReadRec)
-import Frames.InCore (RecVec)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Vinyl (Rec, RecApplicative(rpure), rmap, rapply)
 import Data.Vinyl.Functor (Lift(..), Identity(..))
 import Control.Lens (view, (&), (?~))
-import Pipes (Producer, (>->), runEffect)
+import Pipes (Pipe,Producer, (>->), runEffect)
 import Data.Monoid ((<>),First(..))
-import Data.Maybe (fromMaybe, isNothing)
-import qualified Control.Foldl as L
+import Data.Maybe (fromMaybe)
 import qualified Pipes.Prelude as P
 import qualified Data.Text.Lazy as LT
 import qualified Data.Map as M
@@ -90,7 +88,7 @@ holeFiller label rec1 = let fromJust = fromMaybe (error $ label ++ " failure")
 -- fills in empty values with holeFiller and Defaults typeclass instances
 normalized :: Producer Normalized IO ()
 -- normalized = readTableMaybe "normalized.csv" >-> P.map (holeFiller "normalized")
-normalized = defaultingProducer "normalized.csv" "normalized" 
+normalized = defaultingProducer "normalized.csv" "normalized"
 
 type DenormalizedWithCompositeKey = Record (CompositeKey ': RecordColumns Denormalized)
 -- fills in empty values with holeFiller and Defaults typeclass instances
@@ -109,58 +107,25 @@ appendCompositeKey inRecord = frameConsA compositeKeyTxt inRecord
         viewToTxt l r = intToTxt (view l r)
         intToTxt i = LT.toStrict $ T.format "{}" (T.Only i)
 
-addCompositeKeyToMapFold :: ( Num a
-                            , CompositeKey ∈ rs
-                            ) => L.Fold (Record rs) (M.Map Text a)
-addCompositeKeyToMapFold = L.Fold (\m r -> addCompositeKeyToMap m r) (M.empty) id
-
 addCompositeKeyToMap :: ( Num a
                         , CompositeKey ∈ rs
                         ) => M.Map Text a -> Record rs -> M.Map Text a
 addCompositeKeyToMap m r = M.insert (view compositeKey r) 0 m
 
-buildCompositeKeyMap :: ( Foldable f
-                        , CompositeKey ∈ rs
-                        ) => f (Record rs) -> M.Map Text Integer
-buildCompositeKeyMap = L.fold addCompositeKeyToMapFold
-
--- TODO upgrade(?) to this approach suggested by acowley
--- findMissingRows' :: ( Monad m
---                     , CompositeKey ∈ rs
---                     , CompositeKey ∈ rs1
---                     ) =>
---                     Producer (Record rs) m ()
---                  -> m (Pipe (Record rs1) (Record rs1) m ())
--- findMissingRows' checkProducer = do
---   -- build the index of rows in the producer to check
---   compositeKeyMap <- buildCompositeKeyMap checkProducer
---   -- keep only rows we didn't have in the checkProducer index produced
---   return $ P.filter (\r -> M.notMember (view compositeKey r) compositeKeyMap)
-
-findMissingRows :: ( Monad m,
-                     CompositeKey ∈ rs,
-                     CompositeKey ∈ rs1,
-                     L.PrimMonad pm,
-                     Frames.InCore.RecVec rs
-                   ) =>
-                   Producer (Record rs1) m r
-                -> Producer (Record rs) pm ()
-                -> pm (Producer (Record rs1) m r)
-findMissingRows referenceProducer checkProducer = do
-  -- build the index of rows in the producer to check
-  compositeKeyMap <- buildCompositeKeyMap <$> inCoreAoS checkProducer
-  -- we could have built compositeKeyMap in a single line if we were golfing
-  -- L.fold (L.Fold (\m r -> M.insert (view compositeKey r) 0 m) M.empty id) <$> inCoreAoS checkProducer
-
-  -- keep only rows we didn't have in the checkProducer index produced
-  return $ referenceProducer >-> P.filter (\r -> M.notMember (view compositeKey r) compositeKeyMap)
+findMissingRows :: forall rs1 rs2 m. ( Monad m
+                                 , CompositeKey ∈ rs1
+                                 , CompositeKey ∈ rs2
+                                 ) => Producer (Record rs1) m () -> m (Pipe (Record rs2) (Record rs2) m ())
+findMissingRows checkProducer = do
+  -- read a map of the checkProducer into memory
+  compositeKeyMap <- P.fold (\m r -> addCompositeKeyToMap m r) M.empty id checkProducer
+  pure $ P.filter (\r -> M.notMember (view compositeKey r) (compositeKeyMap :: M.Map Text Integer))
 
 printMissingRows :: IO ()
 printMissingRows = do
   putStrLn "rows normalized contains deonrmalized does not"
-  -- findMissingRows normalized denormalized' >>= \p -> runEffect $ p >-> P.print
-  -- TODO this needs to actually return the right answer :P
-  findMissingRows normalized denormalized >>= \p -> runEffect $ p >-> P.print
+  findMissing <- findMissingRows denormalized
+  runEffect $ normalized >-> findMissing >-> P.print
 
 main :: IO ()
 main = undefined
