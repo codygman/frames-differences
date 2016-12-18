@@ -17,12 +17,14 @@ executable frames-difference
   hs-source-dirs:      src
   main-is:             Main.hs
   default-language:    Haskell2010
-  build-depends:       base >= 4.7 && < 5
-                     , Frames
-                     , vinyl
+  build-depends:       Frames
+                     , base >= 4.7 && < 5
+                     , containers
+                     , foldl
                      , lens
+                     , lens-family-core >= 1.2.1
+                     , mtl >= 2.2.1
+                     , pipes
                      , text
                      , text-format
-                     , pipes
-                     , foldl
-                     , containers
+                     , vinyl
