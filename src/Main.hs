@@ -123,27 +123,30 @@ findMissingRows checkProducer = do
   compositeKeyMap <- P.fold (\m r -> addCompositeKeyToMap m r) M.empty id checkProducer
   pure $ P.filter (\r -> M.notMember (view compositeKey r) (compositeKeyMap :: M.Map Text Integer))
 
--- TODO allow providing a lens to find missing rows on
--- findMissingRowsOn :: forall rs1 rs2 m label f0. ( Monad m
---                                        , label ∈ rs1
---                                        , label ∈ rs2
---                                        , Functor f0
---                                        ) =>
---                      -- Control.Lens.Getter.Getting Text (Rec Identity rs2) Text
---                      (Text -> f0 Text) -> Record rs1 -> f0 (Record rs1)
---                   -> Producer (Record rs1) m ()
---                   -> m (Pipe (Record rs2) (Record rs2) m ())
--- findMissingRowsOn lens checkProducer = do
---   -- read a map of the checkProducer into memory
---   compositeKeyMap <- P.fold (\m r -> addCompositeKeyToMap m r) M.empty id checkProducer
---   pure $ P.filter (\r -> M.notMember (view lens r) (compositeKeyMap :: M.Map Text Integer))
-
-
+-- -- TODO allow providing a lens to find missing rows on
+-- findMissingRowsOn :: forall (checkRec :: [*]) (outRec :: [*]) (checkOrOutRec :: [*]) (monad :: * -> *) (key :: *) label.
+--                      ( Monad monad
+--                      , label ∈ checkRec
+--                      , label ∈ outRec
+--                      , label ∈ checkOrOutRec
+findMissingRowsOn :: forall checkRec outRec monad key .
+                     ( Monad monad
+                     , Ord key
+                     , Show key
+                     ) =>
+                     Getting key (Rec Identity checkRec) key -- lens
+                  -> Getting key (Rec Identity outRec) key -- lens
+                  -> Producer (Record checkRec) monad ()     -- checkProducer
+                  -> monad (Pipe (Record outRec) (Record outRec) monad ())
+findMissingRowsOn lens1 lens2 checkProducer = do
+  keyMap <- P.fold (\m r -> M.insert (view lens1 (r :: Record checkRec)) 0 m) M.empty id checkProducer
+  -- pure $ P.filter (\(r :: Record rec2) -> M.notMember (view lens2 (r :: Record outRec)) (trace ("keymap" ++ show keyMap) keyMap))
+  pure $ P.filter (\(r :: Record rec2) -> M.notMember (view lens2 (r :: Record outRec))  keyMap)
 
 printMissingRows :: IO ()
 printMissingRows = do
-  putStrLn "rows normalized contains deonrmalized does not"
-  findMissing <- findMissingRows denormalized
+  putStrLn "rows normalized contains denormalized does not"
+  findMissing <- findMissingRowsOn compositeKey compositeKey denormalized
   runEffect $ normalized >-> findMissing >-> P.print
 
 main :: IO ()
