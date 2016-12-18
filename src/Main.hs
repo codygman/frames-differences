@@ -4,6 +4,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -137,11 +138,54 @@ findMissingRowsOn lens1 lens2 checkProducer = do
   keyMap <- P.fold (\m r -> M.insert (view lens1 (r :: Record checkRec)) 0 m) M.empty id checkProducer
   pure $ P.filter (\(r :: Record rec2) -> M.notMember (view lens2 (r :: Record outRec))  keyMap)
 
+
+-- attempt to remove the need for passing the same lens twice
+-- currently fails because the same lens specializes to two different types and I don't know how to say "lens should work for both CheckRec and outRec"
+-- findMissingRowsOn' :: forall (checkRec :: [*]) (outRec :: [*]) (bothRec :: [*]) (monad :: * -> *) (key :: *).
+--                      ( Monad monad
+--                      , Ord key
+--                      , Show key
+--                      ) =>
+--                      Getting key _ key -- lens
+--                   -> Producer (Record checkRec) monad ()     -- checkProducer
+--                   -> monad (Pipe (Record outRec) (Record outRec) monad ())
+-- findMissingRowsOn' lens checkProducer = do
+--   keyMap <- P.fold (\m r -> M.insert (view lens (r :: Record checkRec)) 0 m) M.empty id checkProducer
+--   pure $ P.filter (\(r :: Record rec2) -> M.notMember (view lens (r :: Record outRec))  keyMap)
+
+-- src/Main.hs:153:56: error: …
+--     • Could not deduce (Control.Monad.Reader.Class.MonadReader
+--                           (Rec Identity checkRec) ((->) (Record outRec)))
+--         arising from a use of ‘view’
+--       from the context: (Ord key, Monad monad)
+--         bound by the inferred type of
+--                  findMissingRowsOn' :: (Ord key, Monad monad) =>
+--                                        Getting key (Rec Identity checkRec) key
+--                                        -> Producer (Record checkRec) monad ()
+--                                        -> monad (Pipe (Record outRec) (Record outRec) monad ())
+--         at /home/cody/source/frames-differences/src/Main.hs:(151,1)-(153,95)
+--     • In the first argument of ‘M.notMember’, namely
+--         ‘(view lens (r :: Record outRec))’
+--       In the expression:
+--         M.notMember (view lens (r :: Record outRec)) keyMap
+--       In the first argument of ‘P.filter’, namely
+--         ‘(\ (r :: Record rec2)
+--             -> M.notMember (view lens (r :: Record outRec)) keyMap)’
+-- Compilation failed.
+
+
+
 printMissingRows :: IO ()
 printMissingRows = do
   putStrLn "rows normalized contains denormalized does not"
   findMissing <- findMissingRowsOn compositeKey compositeKey denormalized
   runEffect $ normalized >-> findMissing >-> P.print
+
+  -- try out new version that only requires specifying key once
+  -- putStrLn "rows normalized contains denormalized does not"
+  -- findMissing <- findMissingRowsOn' compositeKey denormalized
+  -- runEffect $ normalized >-> findMissing >-> P.print
+
 
 main :: IO ()
 main = undefined
