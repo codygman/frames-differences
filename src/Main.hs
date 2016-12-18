@@ -140,7 +140,6 @@ findMissingRowsOn :: forall checkRec outRec monad key .
                   -> monad (Pipe (Record outRec) (Record outRec) monad ())
 findMissingRowsOn lens1 lens2 checkProducer = do
   keyMap <- P.fold (\m r -> M.insert (view lens1 (r :: Record checkRec)) 0 m) M.empty id checkProducer
-  -- pure $ P.filter (\(r :: Record rec2) -> M.notMember (view lens2 (r :: Record outRec)) (trace ("keymap" ++ show keyMap) keyMap))
   pure $ P.filter (\(r :: Record rec2) -> M.notMember (view lens2 (r :: Record outRec))  keyMap)
 
 printMissingRows :: IO ()
