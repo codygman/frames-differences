@@ -48,8 +48,7 @@ mkCompositeKey' :: ( RecApplicative rs2
                   , KeyC ∈ rs
                   , KeyD ∈ rs
                   , CompositeKey ∈ rs2
-                  ) =>
-                  Record rs -> Record rs2
+                  ) => Record rs -> Record rs2
 mkCompositeKey' denormRow = fromMaybe (error "failed to make composite key") . recMaybe $ newRow
   where newRow = rpure Nothing & compositeKey' ?~ Col compositeKeyTxt
         compositeKeyTxt = view' keyA <> view' keyB <> view' keyC <> view' keyD
@@ -62,8 +61,7 @@ defaultingProducer :: ( ReadRec rs
                       , RecApplicative rs
                       , MonadIO m
                       , LAll Default rs
-                      ) =>
-                      FilePath -> String -> Producer (Rec Identity rs) m ()
+                      ) => FilePath -> String -> Producer (Rec Identity rs) m ()
 defaultingProducer fp label = readTableMaybe fp >-> P.map (holeFiller label)
 
 recMaybe'' :: forall rs. Rec Maybe rs -> Maybe (Record rs)
@@ -72,8 +70,7 @@ recMaybe'' = recMaybe
 holeFiller :: forall ty.
               ( LAll Default ty
               , RecApplicative ty
-              ) =>
-              String -> Rec Maybe ty -> Rec Identity ty
+              ) => String -> Rec Maybe ty -> Rec Identity ty
 holeFiller label rec1 = let fromJust = fromMaybe (error $ label ++ " failure")
                             firstRec1 :: Rec First ty
                             firstRec1 = rmap First rec1
